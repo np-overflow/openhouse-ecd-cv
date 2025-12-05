@@ -1,0 +1,1 @@
+# Runs detection + command mapping + prints command (no unity communication)

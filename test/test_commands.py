@@ -1,0 +1,1 @@
+# see if command mapping is correct (use fake inputs)

@@ -1,0 +1,1 @@
+# print EAR and MAR values
