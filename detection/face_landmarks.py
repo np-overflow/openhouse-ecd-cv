@@ -32,7 +32,7 @@ class FaceLandmarkDetector:
     def _normalized_to_pixel(self, lm, w, h):
         return int(lm.x * w), int(lm.y * h)
 
-    def get_frame_landmarks(self, draw=False):
+    def get_landmarks(self, draw=False):
         """
         Read one frame from webcam, return:
           - success (bool)
@@ -70,6 +70,44 @@ class FaceLandmarkDetector:
             cv2.waitKey(1)
 
         return True, frame, pts
+    
+def draw_eye_mouth_state(frame, landmarks, left_eye_state, right_eye_state, mouth_state, mirror=False):
+    """
+    Draws eye/mouth landmarks with colors based on open/closed state.
+    mirror=True will flip landmark positions to match mirrored frame.
+    """
+    LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144]
+    RIGHT_EYE_IDX = [362, 385, 387, 263, 373, 380]
+    MOUTH_IDX = [13, 14, 61, 291]  # top, bottom, left corner, right corner
+
+    h, w = frame.shape[:2]
+
+    def flip_x(pt):
+        return (w - pt[0], pt[1]) if mirror else pt
+
+    # Colors
+    color_left = (0, 255, 0) if left_eye_state == "open" else (0, 0, 255)
+    color_right = (0, 255, 0) if right_eye_state == "open" else (0, 0, 255)
+    color_mouth = (0, 255, 0) if mouth_state == "open" else (0, 0, 255)
+
+    # Draw left eye
+    for idx in LEFT_EYE_IDX:
+        x, y = flip_x(landmarks[idx])
+        cv2.circle(frame, (x, y), 2, color_left, -1)
+
+    # Draw right eye
+    for idx in RIGHT_EYE_IDX:
+        x, y = flip_x(landmarks[idx])
+        cv2.circle(frame, (x, y), 2, color_right, -1)
+
+    # Draw mouth
+    for idx in MOUTH_IDX:
+        x, y = flip_x(landmarks[idx])
+        cv2.circle(frame, (x, y), 2, color_mouth, -1)
+
+    return frame
+
+
 
 if __name__ == "__main__":
     # quick manual test
@@ -77,7 +115,7 @@ if __name__ == "__main__":
     detector.start()
     print("Press 'q' in the image window to quit.")
     while True:
-        success, frame, pts = detector.get_frame_landmarks(draw=True)
+        success, frame, pts = detector.get_landmarks(draw=True)
         if not success:
             break
         # quit if user presses 'q' in the OpenCV window
