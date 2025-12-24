@@ -3,6 +3,11 @@ import cv2
 import numpy as np
 from collections import deque
 import mediapipe as mp
+import asyncio
+import json
+import websockets
+from websockets.asyncio.server import serve
+
 # detection/face_landmarks.py
 
     # -------------------------
@@ -16,10 +21,28 @@ CONSEC_FRAMES = 20
 SMOOTH_WINDOW = 6           # Moving average window for EAR to reduce flicker
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144] # clockwise ish ig haha idk
 RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]# For mouth we use inner upper/lower and corners:
+PORT = 8765
 # -------------------------
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
-def main():
+
+data = {
+    "move": 0,
+    "steer": 0,
+    "brake": True
+}
+async def handler(websocket):
+    try:
+        while True:
+            await websocket.send(json.dumps(data))
+            await asyncio.sleep(2)
+    except websockets.exceptions.ConnectionClosed:
+        print("CLIENT DISCONNECTED")
+async def servermain():
+    async with serve(handler, "localhost", PORT) as server:
+        print(f"WebSocket server running on ws://localhost:{PORT}")
+        await server.serve_forever()
+def main_cv():
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("ERROR: Could not open camera.")
@@ -75,6 +98,9 @@ def main():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if right_smooth > EAR_THRESHOLD else (0, 0, 255), 2)
                 cv2.putText(frame, f"MAR: {mar_smooth:.3f}", (10, 110),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["brake"]), (10, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["move"]), (60, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["steer"]), (90, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
                 # Check drowsiness
                 if left_smooth < EAR_THRESHOLD:
                     left_counter += 1
@@ -95,6 +121,7 @@ def main():
                     mar_closed = False
 
 
+
                 # Trigger detection if eyes closed for too long, ensures no unplanning turns due to twitching
                 if left_counter >= CONSEC_FRAMES and not left_eye_closed:
                     left_eye_closed = True
@@ -104,16 +131,26 @@ def main():
 
                 if mar_counter >= CONSEC_FRAMES and not mar_closed:
                     mar_closed = True
+
+                if not left_eye_closed and not right_eye_closed:
+                    data["steer"] = 0
                 # Visual alert
                 if left_eye_closed:
+                    data["steer"] = -1
                     cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if right_eye_closed:
+                    data["steer"] = 1
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if mar_closed:
+                    data["move"] = 0
+                    data["brake"] = True
                     cv2.putText(frame, "MOUTH CLOSED", (350, 200),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+                else:
+                    data["move"] = 1
+                    data["brake"] = False
           
             else:
                 # no face detected: reset counters and show message
@@ -137,6 +174,11 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
 
+async def main():
+    server_task = asyncio.create_task(servermain())
+    cv_task = asyncio.to_thread(main_cv)
+    await asyncio.gather(server_task, cv_task)
+
+
 if __name__ == "__main__":
-    # quick manual test
-    main()
+    asyncio.run(main())
