@@ -112,7 +112,7 @@ def main():
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if mar_closed:
-                    cv2.putText(frame, "MOUTH CLOSED", (350, 500),
+                    cv2.putText(frame, "MOUTH CLOSED", (350, 200),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
           
             else:
