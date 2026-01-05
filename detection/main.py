@@ -17,7 +17,7 @@ from websockets.asyncio.server import serve
 EAR_THRESHOLD = 0.1
 MAR_TRESHOLD = 0.5
 # Number of consecutive frames with EAR < threshold to trigger alarm
-CONSEC_FRAMES = 20
+CONSEC_FRAMES = 10
 SMOOTH_WINDOW = 6           # Moving average window for EAR to reduce flicker
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144] # clockwise ish ig haha idk
 RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]# For mouth we use inner upper/lower and corners:
@@ -29,20 +29,19 @@ mp_drawing = mp.solutions.drawing_utils
 data = {
     "move": 0,
     "steer": 0,
-    "brake": True
 }
 async def handler(websocket):
     try:
         while True:
             await websocket.send(json.dumps(data))
-            await asyncio.sleep(2)
+            await asyncio.sleep(0.05)
     except websockets.exceptions.ConnectionClosed:
         print("CLIENT DISCONNECTED")
 async def servermain():
-    async with serve(handler, "localhost", PORT) as server:
-        print(f"WebSocket server running on ws://localhost:{PORT}")
-        await server.serve_forever()
-def main_cv():
+    async with serve(handler, "localhost", PORT):
+        print(f"WebSocket running on ws://localhost:{PORT}")
+        await asyncio.Future()
+async def cv_loop():
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("ERROR: Could not open camera.")
@@ -98,9 +97,8 @@ def main_cv():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if right_smooth > EAR_THRESHOLD else (0, 0, 255), 2)
                 cv2.putText(frame, f"MAR: {mar_smooth:.3f}", (10, 110),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["brake"]), (10, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
                 cv2.putText(frame, str(data["move"]), (60, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["steer"]), (90, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["steer"]), (90, 400),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
                 # Check drowsiness
                 if left_smooth < EAR_THRESHOLD:
                     left_counter += 1
@@ -136,21 +134,32 @@ def main_cv():
                     data["steer"] = 0
                 # Visual alert
                 if left_eye_closed:
-                    data["steer"] = -1
+                    if data["steer"] > -1:
+                        data["steer"] -= 0.05
+                    else:
+                        data["steer"] = -1
                     cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if right_eye_closed:
-                    data["steer"] = 1
+                    if data["steer"] < 1:
+                        data["steer"] += 0.05
+                    else:
+                        data["steer"] = 1
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if mar_closed:
-                    data["move"] = 0
-                    data["brake"] = True
+                    if data["move"] > -1:
+                        data["move"] -= 0.05
+                    else:
+                        data["move"] = -1
                     cv2.putText(frame, "MOUTH CLOSED", (350, 200),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 else:
-                    data["move"] = 1
-                    data["brake"] = False
+                    if data["move"] < 1:
+                        data["move"] += 0.05
+                    else:
+                        data["move"] = 1
+                        
           
             else:
                 # no face detected: reset counters and show message
@@ -171,13 +180,17 @@ def main_cv():
             if key == ord('q') or key == 27:  # 'q' or ESC to quit
                 break
 
+            await asyncio.sleep(0)
+
     cap.release()
     cv2.destroyAllWindows()
 
 async def main():
-    server_task = asyncio.create_task(servermain())
-    cv_task = asyncio.to_thread(main_cv)
-    await asyncio.gather(server_task, cv_task)
+    await asyncio.gather(
+        servermain(),
+        cv_loop()
+    )
+
 
 
 if __name__ == "__main__":
