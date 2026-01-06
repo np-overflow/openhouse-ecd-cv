@@ -14,7 +14,7 @@ from websockets.asyncio.server import serve
 # Configuration (tweak me)
 # -------------------------
 # Eye Aspect Ratio threshold below which eye is considered "closed"
-EAR_THRESHOLD = 0.1
+EAR_THRESHOLD = 0.11
 MAR_TRESHOLD = 0.5
 # Number of consecutive frames with EAR < threshold to trigger alarm
 CONSEC_FRAMES = 10
@@ -134,15 +134,23 @@ async def cv_loop():
                     data["steer"] = 0
                 # Visual alert
                 if left_eye_closed:
-                    if data["steer"] > -1:
-                        data["steer"] -= 0.05
+                    if data["steer"] > -0.3:
+                        data["steer"] -= 0.02
+                    elif data["steer"] > -0.7:
+                        data["steer"] -= 0.03
+                    elif data["steer"] > -1:
+                        data["steer"] -= 0.01
                     else:
                         data["steer"] = -1
                     cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if right_eye_closed:
-                    if data["steer"] < 1:
-                        data["steer"] += 0.05
+                    if data["steer"] < 0.3:
+                        data["steer"] += 0.02
+                    elif data["steer"] < 0.7:
+                        data["steer"] += 0.03
+                    elif data["steer"] < 1:
+                        data["steer"] += 0.01
                     else:
                         data["steer"] = 1
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
