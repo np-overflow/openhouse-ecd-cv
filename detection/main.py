@@ -15,7 +15,8 @@ from websockets.asyncio.server import serve
 # -------------------------
 # Eye Aspect Ratio threshold below which eye is considered "closed"
 EAR_THRESHOLD = 0.11
-MAR_TRESHOLD = 0.5
+MAR_CLOSED_THRESHOLD = 0.5
+MAR_HALFOPEN_THRESHOLD = 1
 # Number of consecutive frames with EAR < threshold to trigger alarm
 CONSEC_FRAMES = 10
 SMOOTH_WINDOW = 6           # Moving average window for EAR to reduce flicker
@@ -52,10 +53,11 @@ async def cv_loop():
     mar_history = deque(maxlen=SMOOTH_WINDOW)
     left_counter = 0
     right_counter = 0
-    mar_counter = 0
+    mar_closed_counter = 0
+    mar_halfopen_counter = 0
     left_eye_closed = False
     right_eye_closed = False
-    mar_closed = False
+    mar_state = "stopped"
     with mp_face_mesh.FaceMesh(static_image_mode=False,
                                max_num_faces=1,
                                refine_landmarks=True,
@@ -112,11 +114,16 @@ async def cv_loop():
                     right_counter = 0
                     right_eye_closed = False
 
-                if mar_smooth < MAR_TRESHOLD:
-                    mar_counter += 1
+                if mar_smooth < MAR_CLOSED_THRESHOLD:
+                    mar_closed_counter += 1
+                    mar_halfopen_counter = 0
+                elif mar_smooth < MAR_HALFOPEN_THRESHOLD:
+                    mar_halfopen_counter += 1
+                    mar_closed_counter = 0
                 else:
-                    mar_counter = 0
-                    mar_closed = False
+                    mar_closed_counter = 0
+                    mar_halfopen_counter = 0
+                    mar_state = "open"
 
 
 
@@ -127,17 +134,20 @@ async def cv_loop():
                 if right_counter >= CONSEC_FRAMES and not right_eye_closed:
                     right_eye_closed = True
 
-                if mar_counter >= CONSEC_FRAMES and not mar_closed:
-                    mar_closed = True
+                if mar_closed_counter >= CONSEC_FRAMES and not mar_state == "closed":
+                    mar_state = "closed"
+                
+                if mar_halfopen_counter >= CONSEC_FRAMES and not mar_state == "halfopen":
+                    mar_state = "halfopen"
 
                 if not left_eye_closed and not right_eye_closed:
                     data["steer"] = 0
                 # Visual alert
                 if left_eye_closed:
                     if data["steer"] > -0.3:
-                        data["steer"] -= 0.02
-                    elif data["steer"] > -0.7:
                         data["steer"] -= 0.03
+                    # elif data["steer"] > -0.7:
+                    #     data["steer"] -= 0.01
                     elif data["steer"] > -1:
                         data["steer"] -= 0.01
                     else:
@@ -146,24 +156,37 @@ async def cv_loop():
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if right_eye_closed:
                     if data["steer"] < 0.3:
-                        data["steer"] += 0.02
-                    elif data["steer"] < 0.7:
                         data["steer"] += 0.03
+                    # elif data["steer"] < 0.7:
+                    #     data["steer"] += 0.03
                     elif data["steer"] < 1:
                         data["steer"] += 0.01
                     else:
                         data["steer"] = 1
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
-                if mar_closed:
-                    if data["move"] > -1:
+                if mar_state == "closed":
+                    if data["move"] > 0:
+                        data["move"] = 0
+                    elif data["move"] > -1:
                         data["move"] -= 0.05
                     else:
                         data["move"] = -1
                     cv2.putText(frame, "MOUTH CLOSED", (350, 200),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+                elif mar_state == "halfopen":
+                    if data["move"] < mar_smooth:
+                        data["move"] += 0.05
+                    elif data["move"] > mar_smooth:
+                        data["move"] -= 0.05
+                    cv2.putText(frame, "MOUTH HALF-OPEN", (350, 200),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 3)
+                elif mar_state == "stopped":
+                    data["move"] = 0
                 else:
-                    if data["move"] < 1:
+                    if data["move"] < 0:
+                        data["move"] = 0
+                    elif data["move"] < 1:
                         data["move"] += 0.05
                     else:
                         data["move"] = 1
@@ -175,8 +198,9 @@ async def cv_loop():
                 right_ear_history.clear()
                 left_counter = 0
                 right_counter = 0
-                mar_counter = 0
-                mar_closed = False
+                mar_closed_counter = 0
+                mar_halfopen_counter = 0
+                mar_state = "stopped"
                 left_eye_closed = False
                 right_eye_closed = False
                 cv2.putText(frame, "No face", (10, 30),
