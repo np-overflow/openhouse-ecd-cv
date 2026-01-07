@@ -28,6 +28,9 @@ PORT = 8765
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
 count = 0
+with open("photocounter.txt","r") as counter:
+    count = counter.readline().strip()
+    count = int(count)
 current_frame = None
 frame_lock = asyncio.Lock()
 data = {
@@ -35,10 +38,12 @@ data = {
     "steer": 0,
 }
 def capture(frame):
+    global count
+    count += 1
     outputdir = "saved_images"
     savepath = os.path.join(outputdir,f"IMG_{count}.png")
     cv2.imwrite(savepath,frame)
-
+ 
 async def handler(websocket):
     try:
         while True:
@@ -144,7 +149,7 @@ async def cv_loop():
                     mar_state = "open"
 
 
-
+                # small and QUICK 
                 # Trigger detection if eyes closed for too long, ensures no unplanning turns due to twitching
                 if left_counter >= CONSEC_FRAMES and not left_eye_closed:
                     left_eye_closed = True
@@ -228,6 +233,8 @@ async def cv_loop():
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q') or key == 27:  # 'q' or ESC to quit
+                with open("photocounter.txt","w") as counter:
+                    counter.write(str(count))
                 break
 
             await asyncio.sleep(0)
