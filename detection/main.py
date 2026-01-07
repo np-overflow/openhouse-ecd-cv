@@ -7,6 +7,7 @@ import asyncio
 import json
 import websockets
 from websockets.asyncio.server import serve
+import os
 
 # detection/face_landmarks.py
 
@@ -26,16 +27,31 @@ PORT = 8765
 # -------------------------
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
-
+count = 0
+current_frame = None
+frame_lock = asyncio.Lock()
 data = {
     "move": 0,
     "steer": 0,
 }
+def capture(frame):
+    outputdir = "saved_images"
+    savepath = os.path.join(outputdir,f"IMG_{count}.png")
+    cv2.imwrite(savepath,frame)
+
 async def handler(websocket):
     try:
         while True:
             await websocket.send(json.dumps(data))
             await asyncio.sleep(0.05)
+            try:
+                msg = await asyncio.wait_for(websocket.recv(), timeout=0.01)
+                print("Received:", msg)
+
+                if msg == "capture":
+                    capture(current_frame)
+            except asyncio.TimeoutError:
+                pass 
     except websockets.exceptions.ConnectionClosed:
         print("CLIENT DISCONNECTED")
 async def servermain():
@@ -73,6 +89,8 @@ async def cv_loop():
             h, w = frame.shape[:2]
             # flip horizontally so it feels like a mirror (optional)
             frame = cv2.flip(frame, 1)
+            async with frame_lock:
+                current_frame = frame.copy()
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             results = face_mesh.process(rgb_frame)
