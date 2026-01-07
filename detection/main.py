@@ -18,7 +18,7 @@ EAR_THRESHOLD = 0.11
 MAR_CLOSED_THRESHOLD = 0.5
 MAR_HALFOPEN_THRESHOLD = 1
 # Number of consecutive frames with EAR < threshold to trigger alarm
-CONSEC_FRAMES = 10
+CONSEC_FRAMES = 5
 SMOOTH_WINDOW = 6           # Moving average window for EAR to reduce flicker
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144] # clockwise ish ig haha idk
 RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]# For mouth we use inner upper/lower and corners:
@@ -144,10 +144,10 @@ async def cv_loop():
                     data["steer"] = 0
                 # Visual alert
                 if left_eye_closed:
-                    if data["steer"] > -0.3:
-                        data["steer"] -= 0.03
-                    # elif data["steer"] > -0.7:
-                    #     data["steer"] -= 0.01
+                    if data["steer"] > -0.2:
+                        data["steer"] -= 0.05
+                    elif data["steer"] > -0.4:
+                         data["steer"] -= 0.03
                     elif data["steer"] > -1:
                         data["steer"] -= 0.01
                     else:
@@ -155,10 +155,10 @@ async def cv_loop():
                     cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if right_eye_closed:
-                    if data["steer"] < 0.3:
-                        data["steer"] += 0.03
-                    # elif data["steer"] < 0.7:
-                    #     data["steer"] += 0.03
+                    if data["steer"] < 0.2:
+                        data["steer"] += 0.05
+                    elif data["steer"] < 0.4:
+                         data["steer"] += 0.03
                     elif data["steer"] < 1:
                         data["steer"] += 0.01
                     else:
