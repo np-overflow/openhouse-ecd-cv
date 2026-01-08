@@ -164,9 +164,9 @@ async def cv_loop():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if right_smooth > EAR_THRESHOLD_SMALL else (0, 0, 255), 2)
                 cv2.putText(frame, f"MAR: {mar_smooth:.3f}", (10, 110),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["move"]), (60, 250),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["steer_s"]), (90, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["steer_l"]), (90, 350),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                cv2.putText(frame, str(data["move"])[5], (60, 250),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["steer_s"])[5], (90, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["steer_l"])[5], (90, 350),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 # Check drowsiness
                 if left_smooth < EAR_THRESHOLD_SMALL:
                     left_counter_small += 1
@@ -311,13 +311,17 @@ async def cv_loop():
                 # no face detected: reset counters and show message
                 left_ear_history.clear()
                 right_ear_history.clear()
-                left_counter = 0
-                right_counter = 0
+                left_counter_small = 0
+                left_counter_large = 0
+                right_counter_small = 0
+                right_counter_large = 0
                 mar_closed_counter = 0
                 mar_halfopen_counter = 0
                 mar_state = "stopped"
-                left_eye_closed = False
-                right_eye_closed = False
+                left_eye_closed_s = False
+                right_eye_closed_s = False
+                left_eye_closed_l = False
+                right_eye_closed_l = False
                 cv2.putText(frame, "No face", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
