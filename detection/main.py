@@ -7,10 +7,7 @@ import asyncio
 import json
 import websockets
 from websockets.asyncio.server import serve
-<<<<<<< HEAD
-=======
 import os
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 
 # detection/face_landmarks.py
 
@@ -19,16 +16,10 @@ import os
 # -------------------------
 # Eye Aspect Ratio threshold below which eye is considered "closed"
 EAR_THRESHOLD = 0.11
-<<<<<<< HEAD
-MAR_TRESHOLD = 0.5
-# Number of consecutive frames with EAR < threshold to trigger alarm
-CONSEC_FRAMES = 10
-=======
 MAR_CLOSED_THRESHOLD = 0.5
 MAR_HALFOPEN_THRESHOLD = 1
 # Number of consecutive frames with EAR < threshold to trigger alarm
 CONSEC_FRAMES = 5
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 SMOOTH_WINDOW = 6           # Moving average window for EAR to reduce flicker
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144] # clockwise ish ig haha idk
 RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]# For mouth we use inner upper/lower and corners:
@@ -36,37 +27,59 @@ PORT = 8765
 # -------------------------
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
-<<<<<<< HEAD
-
-=======
 count = 0
 with open("photocounter.txt","r") as counter:
     count = counter.readline().strip()
     count = int(count)
 current_frame = None
 frame_lock = asyncio.Lock()
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 data = {
     "move": 0,
     "steer": 0,
 }
-<<<<<<< HEAD
-=======
 def capture(frame):
     global count
     count += 1
     outputdir = "saved_images"
     savepath = os.path.join(outputdir,f"IMG_{count}.png")
     cv2.imwrite(savepath,frame)
- 
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
+
+def scale(img, zoom_factor=0.5):
+    return cv2.resize(img, None, fx=zoom_factor, fy=zoom_factor, interpolation=cv2.INTER_LINEAR)
+
+def zoom_center_crop(image, scale_factor=1.5, height_offset=50):
+    """Zooms into the center of an image by cropping and resizing."""
+    height, width, channels = image.shape
+    
+    # Calculate the new dimensions for the cropped area
+    # Scale factor > 1 means zoom in
+    new_height = int(height / scale_factor)
+    new_width = int(width / scale_factor)
+    
+    # Calculate the center of the image
+    center_y, center_x = height // 2, width // 2
+    
+    # Calculate the top-left and bottom-right coordinates for the crop
+    # Ensure coordinates are within image boundaries
+    min_x = max(0, center_x - new_width // 2)
+    max_x = min(width, center_x + new_width // 2)
+    min_y = max(0, center_y - new_height // 2) - height_offset
+    max_y = min(height, center_y + new_height // 2) - height_offset
+
+    # Crop the image (ROI selection)
+    cropped = image[min_y:max_y, min_x:max_x]
+    
+    # Resize the cropped region back to the original dimensions
+    # This enlarges the pixels of the cropped area to fill the frame
+    zoomed_image = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
+    
+    return zoomed_image
+
 async def handler(websocket):
     try:
         while True:
             await websocket.send(json.dumps(data))
             await asyncio.sleep(0.05)
-<<<<<<< HEAD
-=======
             try:
                 msg = await asyncio.wait_for(websocket.recv(), timeout=0.01)
                 print("Received:", msg)
@@ -75,7 +88,6 @@ async def handler(websocket):
                     capture(current_frame)
             except asyncio.TimeoutError:
                 pass 
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
     except websockets.exceptions.ConnectionClosed:
         print("CLIENT DISCONNECTED")
 async def servermain():
@@ -93,18 +105,11 @@ async def cv_loop():
     mar_history = deque(maxlen=SMOOTH_WINDOW)
     left_counter = 0
     right_counter = 0
-<<<<<<< HEAD
-    mar_counter = 0
-    left_eye_closed = False
-    right_eye_closed = False
-    mar_closed = False
-=======
     mar_closed_counter = 0
     mar_halfopen_counter = 0
     left_eye_closed = False
     right_eye_closed = False
     mar_state = "stopped"
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
     with mp_face_mesh.FaceMesh(static_image_mode=False,
                                max_num_faces=1,
                                refine_landmarks=True,
@@ -120,11 +125,13 @@ async def cv_loop():
             h, w = frame.shape[:2]
             # flip horizontally so it feels like a mirror (optional)
             frame = cv2.flip(frame, 1)
-<<<<<<< HEAD
-=======
+
+            # frame resizing
+            frame = scale(frame, 0.6)
+            frame = zoom_center_crop(frame, 2.2, 40)
+
             async with frame_lock:
                 current_frame = frame.copy()
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             results = face_mesh.process(rgb_frame)
@@ -166,16 +173,6 @@ async def cv_loop():
                     right_counter = 0
                     right_eye_closed = False
 
-<<<<<<< HEAD
-                if mar_smooth < MAR_TRESHOLD:
-                    mar_counter += 1
-                else:
-                    mar_counter = 0
-                    mar_closed = False
-
-
-
-=======
                 if mar_smooth < MAR_CLOSED_THRESHOLD:
                     mar_closed_counter += 1
                     mar_halfopen_counter = 0
@@ -189,7 +186,6 @@ async def cv_loop():
 
 
                 # small and QUICK 
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                 # Trigger detection if eyes closed for too long, ensures no unplanning turns due to twitching
                 if left_counter >= CONSEC_FRAMES and not left_eye_closed:
                     left_eye_closed = True
@@ -197,32 +193,20 @@ async def cv_loop():
                 if right_counter >= CONSEC_FRAMES and not right_eye_closed:
                     right_eye_closed = True
 
-<<<<<<< HEAD
-                if mar_counter >= CONSEC_FRAMES and not mar_closed:
-                    mar_closed = True
-=======
                 if mar_closed_counter >= CONSEC_FRAMES and not mar_state == "closed":
                     mar_state = "closed"
                 
                 if mar_halfopen_counter >= CONSEC_FRAMES and not mar_state == "halfopen":
                     mar_state = "halfopen"
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 
                 if not left_eye_closed and not right_eye_closed:
                     data["steer"] = 0
                 # Visual alert
                 if left_eye_closed:
-<<<<<<< HEAD
-                    if data["steer"] > -0.3:
-                        data["steer"] -= 0.02
-                    elif data["steer"] > -0.7:
-                        data["steer"] -= 0.03
-=======
                     if data["steer"] > -0.2:
                         data["steer"] -= 0.05
                     elif data["steer"] > -0.4:
                          data["steer"] -= 0.03
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                     elif data["steer"] > -1:
                         data["steer"] -= 0.01
                     else:
@@ -230,47 +214,31 @@ async def cv_loop():
                     cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if right_eye_closed:
-<<<<<<< HEAD
-                    if data["steer"] < 0.3:
-                        data["steer"] += 0.02
-                    elif data["steer"] < 0.7:
-                        data["steer"] += 0.03
-=======
                     if data["steer"] < 0.2:
                         data["steer"] += 0.05
                     elif data["steer"] < 0.4:
                          data["steer"] += 0.03
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                     elif data["steer"] < 1:
                         data["steer"] += 0.01
                     else:
                         data["steer"] = 1
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
-<<<<<<< HEAD
-                if mar_closed:
-                    if data["move"] > -1:
-=======
                 if mar_state == "closed":
                     if data["move"] > 0:
                         data["move"] = 0
                     elif data["move"] > -1:
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
-                        data["move"] -= 0.05
+                        data["move"] -= 0.07
                     else:
                         data["move"] = -1
-                    cv2.putText(frame, "MOUTH CLOSED", (350, 200),
+                    cv2.putText(frame, "MOUTH CLOSED", (350, 350),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
-<<<<<<< HEAD
-                else:
-                    if data["move"] < 1:
-=======
                 elif mar_state == "halfopen":
                     if data["move"] < mar_smooth:
                         data["move"] += 0.05
                     elif data["move"] > mar_smooth:
                         data["move"] -= 0.05
-                    cv2.putText(frame, "MOUTH HALF-OPEN", (350, 200),
+                    cv2.putText(frame, "MOUTH HALF-OPEN", (350, 350),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 3)
                 elif mar_state == "stopped":
                     data["move"] = 0
@@ -278,7 +246,6 @@ async def cv_loop():
                     if data["move"] < 0:
                         data["move"] = 0
                     elif data["move"] < 1:
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                         data["move"] += 0.05
                     else:
                         data["move"] = 1
@@ -290,28 +257,20 @@ async def cv_loop():
                 right_ear_history.clear()
                 left_counter = 0
                 right_counter = 0
-<<<<<<< HEAD
-                mar_counter = 0
-                mar_closed = False
-=======
                 mar_closed_counter = 0
                 mar_halfopen_counter = 0
                 mar_state = "stopped"
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                 left_eye_closed = False
                 right_eye_closed = False
                 cv2.putText(frame, "No face", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
             cv2.imshow("Face Detector", frame)
-
+            
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q') or key == 27:  # 'q' or ESC to quit
-<<<<<<< HEAD
-=======
                 with open("photocounter.txt","w") as counter:
                     counter.write(str(count))
->>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                 break
 
             await asyncio.sleep(0)
