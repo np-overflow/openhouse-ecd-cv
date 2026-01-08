@@ -7,6 +7,10 @@ import asyncio
 import json
 import websockets
 from websockets.asyncio.server import serve
+<<<<<<< HEAD
+=======
+import os
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 
 # detection/face_landmarks.py
 
@@ -15,9 +19,16 @@ from websockets.asyncio.server import serve
 # -------------------------
 # Eye Aspect Ratio threshold below which eye is considered "closed"
 EAR_THRESHOLD = 0.11
+<<<<<<< HEAD
 MAR_TRESHOLD = 0.5
 # Number of consecutive frames with EAR < threshold to trigger alarm
 CONSEC_FRAMES = 10
+=======
+MAR_CLOSED_THRESHOLD = 0.5
+MAR_HALFOPEN_THRESHOLD = 1
+# Number of consecutive frames with EAR < threshold to trigger alarm
+CONSEC_FRAMES = 5
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 SMOOTH_WINDOW = 6           # Moving average window for EAR to reduce flicker
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144] # clockwise ish ig haha idk
 RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]# For mouth we use inner upper/lower and corners:
@@ -25,16 +36,46 @@ PORT = 8765
 # -------------------------
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
+<<<<<<< HEAD
 
+=======
+count = 0
+with open("photocounter.txt","r") as counter:
+    count = counter.readline().strip()
+    count = int(count)
+current_frame = None
+frame_lock = asyncio.Lock()
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 data = {
     "move": 0,
     "steer": 0,
 }
+<<<<<<< HEAD
+=======
+def capture(frame):
+    global count
+    count += 1
+    outputdir = "saved_images"
+    savepath = os.path.join(outputdir,f"IMG_{count}.png")
+    cv2.imwrite(savepath,frame)
+ 
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 async def handler(websocket):
     try:
         while True:
             await websocket.send(json.dumps(data))
             await asyncio.sleep(0.05)
+<<<<<<< HEAD
+=======
+            try:
+                msg = await asyncio.wait_for(websocket.recv(), timeout=0.01)
+                print("Received:", msg)
+
+                if msg == "capture":
+                    capture(current_frame)
+            except asyncio.TimeoutError:
+                pass 
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
     except websockets.exceptions.ConnectionClosed:
         print("CLIENT DISCONNECTED")
 async def servermain():
@@ -52,10 +93,18 @@ async def cv_loop():
     mar_history = deque(maxlen=SMOOTH_WINDOW)
     left_counter = 0
     right_counter = 0
+<<<<<<< HEAD
     mar_counter = 0
     left_eye_closed = False
     right_eye_closed = False
     mar_closed = False
+=======
+    mar_closed_counter = 0
+    mar_halfopen_counter = 0
+    left_eye_closed = False
+    right_eye_closed = False
+    mar_state = "stopped"
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
     with mp_face_mesh.FaceMesh(static_image_mode=False,
                                max_num_faces=1,
                                refine_landmarks=True,
@@ -71,6 +120,11 @@ async def cv_loop():
             h, w = frame.shape[:2]
             # flip horizontally so it feels like a mirror (optional)
             frame = cv2.flip(frame, 1)
+<<<<<<< HEAD
+=======
+            async with frame_lock:
+                current_frame = frame.copy()
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             results = face_mesh.process(rgb_frame)
@@ -112,6 +166,7 @@ async def cv_loop():
                     right_counter = 0
                     right_eye_closed = False
 
+<<<<<<< HEAD
                 if mar_smooth < MAR_TRESHOLD:
                     mar_counter += 1
                 else:
@@ -120,6 +175,21 @@ async def cv_loop():
 
 
 
+=======
+                if mar_smooth < MAR_CLOSED_THRESHOLD:
+                    mar_closed_counter += 1
+                    mar_halfopen_counter = 0
+                elif mar_smooth < MAR_HALFOPEN_THRESHOLD:
+                    mar_halfopen_counter += 1
+                    mar_closed_counter = 0
+                else:
+                    mar_closed_counter = 0
+                    mar_halfopen_counter = 0
+                    mar_state = "open"
+
+
+                # small and QUICK 
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                 # Trigger detection if eyes closed for too long, ensures no unplanning turns due to twitching
                 if left_counter >= CONSEC_FRAMES and not left_eye_closed:
                     left_eye_closed = True
@@ -127,17 +197,32 @@ async def cv_loop():
                 if right_counter >= CONSEC_FRAMES and not right_eye_closed:
                     right_eye_closed = True
 
+<<<<<<< HEAD
                 if mar_counter >= CONSEC_FRAMES and not mar_closed:
                     mar_closed = True
+=======
+                if mar_closed_counter >= CONSEC_FRAMES and not mar_state == "closed":
+                    mar_state = "closed"
+                
+                if mar_halfopen_counter >= CONSEC_FRAMES and not mar_state == "halfopen":
+                    mar_state = "halfopen"
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
 
                 if not left_eye_closed and not right_eye_closed:
                     data["steer"] = 0
                 # Visual alert
                 if left_eye_closed:
+<<<<<<< HEAD
                     if data["steer"] > -0.3:
                         data["steer"] -= 0.02
                     elif data["steer"] > -0.7:
                         data["steer"] -= 0.03
+=======
+                    if data["steer"] > -0.2:
+                        data["steer"] -= 0.05
+                    elif data["steer"] > -0.4:
+                         data["steer"] -= 0.03
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                     elif data["steer"] > -1:
                         data["steer"] -= 0.01
                     else:
@@ -145,25 +230,55 @@ async def cv_loop():
                     cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
                 if right_eye_closed:
+<<<<<<< HEAD
                     if data["steer"] < 0.3:
                         data["steer"] += 0.02
                     elif data["steer"] < 0.7:
                         data["steer"] += 0.03
+=======
+                    if data["steer"] < 0.2:
+                        data["steer"] += 0.05
+                    elif data["steer"] < 0.4:
+                         data["steer"] += 0.03
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                     elif data["steer"] < 1:
                         data["steer"] += 0.01
                     else:
                         data["steer"] = 1
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+<<<<<<< HEAD
                 if mar_closed:
                     if data["move"] > -1:
+=======
+                if mar_state == "closed":
+                    if data["move"] > 0:
+                        data["move"] = 0
+                    elif data["move"] > -1:
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                         data["move"] -= 0.05
                     else:
                         data["move"] = -1
                     cv2.putText(frame, "MOUTH CLOSED", (350, 200),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+<<<<<<< HEAD
                 else:
                     if data["move"] < 1:
+=======
+                elif mar_state == "halfopen":
+                    if data["move"] < mar_smooth:
+                        data["move"] += 0.05
+                    elif data["move"] > mar_smooth:
+                        data["move"] -= 0.05
+                    cv2.putText(frame, "MOUTH HALF-OPEN", (350, 200),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 3)
+                elif mar_state == "stopped":
+                    data["move"] = 0
+                else:
+                    if data["move"] < 0:
+                        data["move"] = 0
+                    elif data["move"] < 1:
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                         data["move"] += 0.05
                     else:
                         data["move"] = 1
@@ -175,8 +290,14 @@ async def cv_loop():
                 right_ear_history.clear()
                 left_counter = 0
                 right_counter = 0
+<<<<<<< HEAD
                 mar_counter = 0
                 mar_closed = False
+=======
+                mar_closed_counter = 0
+                mar_halfopen_counter = 0
+                mar_state = "stopped"
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                 left_eye_closed = False
                 right_eye_closed = False
                 cv2.putText(frame, "No face", (10, 30),
@@ -186,6 +307,11 @@ async def cv_loop():
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q') or key == 27:  # 'q' or ESC to quit
+<<<<<<< HEAD
+=======
+                with open("photocounter.txt","w") as counter:
+                    counter.write(str(count))
+>>>>>>> 75087778f25501d01777987bde14f2bd1aa2a4f3
                 break
 
             await asyncio.sleep(0)
