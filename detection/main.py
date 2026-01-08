@@ -37,7 +37,9 @@ frame_lock = asyncio.Lock()
 data = {
     "move": 0,
     "steer_s": 0,
-    "steer_l": 0
+    "steer_l": 0,
+    "alert_s": 0,
+    "alert_l": 0
 }
 def capture(frame):
     global count
@@ -76,6 +78,7 @@ def zoom_center_crop(image, scale_factor=1.5, height_offset=50):
     zoomed_image = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
     
     return zoomed_image
+
 async def handler(websocket):
     try:
         while True:
@@ -99,6 +102,7 @@ async def servermain():
     async with serve(handler, "localhost", PORT):
         print(f"WebSocket running on ws://localhost:{PORT}")
         await asyncio.Future()
+
 async def cv_loop():
     global current_frame
 
@@ -138,8 +142,8 @@ async def cv_loop():
             frame = cv2.flip(frame, 1)
 
             # frame resizing
-            frame = scale(frame, 0.5)
-            frame = zoom_center_crop(frame, 2.3, 40)
+            # frame = scale(frame, 0.5)
+            # frame = zoom_center_crop(frame, 2.3, 40)
 
             # async with frame_lock:
             current_frame = frame.copy()
@@ -242,6 +246,17 @@ async def cv_loop():
                 
                 if mar_halfopen_counter >= CONSEC_FRAMES and not mar_state == "halfopen":
                     mar_state = "halfopen"
+
+                
+                if left_eye_closed_s and right_eye_closed_s:
+                    data["alert_s"] = 1;
+                else:
+                    data["alert_s"] = 0;
+                
+                if left_eye_closed_l and right_eye_closed_l:
+                    data["alert_l"] = 1;
+                else:
+                    data["alert_l"] = 0;
                 
                 # -- LARGE MODE STEERING
                 if not left_eye_closed_l and not right_eye_closed_l:
