@@ -164,9 +164,22 @@ async def cv_loop():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if right_smooth > EAR_THRESHOLD_SMALL else (0, 0, 255), 2)
                 cv2.putText(frame, f"MAR: {mar_smooth:.3f}", (10, 110),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["move"])[5], (60, 250),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["steer_s"])[5], (90, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["steer_l"])[5], (90, 350),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+                move_data = str(data["move"])
+                if len(move_data) > 5:
+                    move_data = move_data[:5]
+
+                steer_s_data = str(data["steer_s"])
+                if len(steer_s_data) > 5:
+                    steer_s_data = steer_s_data[:5]
+
+                steer_l_data = str(data["steer_l"])
+                if len(steer_l_data) > 5:
+                    steer_l_data = steer_l_data[:5]
+
+                cv2.putText(frame, move_data, (60, 250),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, steer_s_data, (90, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, steer_l_data, (90, 350),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 # Check drowsiness
                 if left_smooth < EAR_THRESHOLD_SMALL:
                     left_counter_small += 1
