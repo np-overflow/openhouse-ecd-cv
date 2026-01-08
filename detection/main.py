@@ -15,7 +15,8 @@ import os
 # Configuration (tweak me)
 # -------------------------
 # Eye Aspect Ratio threshold below which eye is considered "closed"
-EAR_THRESHOLD = 0.11
+EAR_THRESHOLD_SMALL = 0.11
+EAR_THRESHOLD_LARGE = 0.16
 MAR_CLOSED_THRESHOLD = 0.5
 MAR_HALFOPEN_THRESHOLD = 1
 # Number of consecutive frames with EAR < threshold to trigger alarm
@@ -35,7 +36,8 @@ current_frame = None
 frame_lock = asyncio.Lock()
 data = {
     "move": 0,
-    "steer": 0,
+    "steer_s": 0,
+    "steer_l": 0
 }
 def capture(frame):
     global count
@@ -103,12 +105,16 @@ async def cv_loop():
     left_ear_history = deque(maxlen=SMOOTH_WINDOW)
     right_ear_history = deque(maxlen=SMOOTH_WINDOW)
     mar_history = deque(maxlen=SMOOTH_WINDOW)
-    left_counter = 0
-    right_counter = 0
+    left_counter_small = 0
+    right_counter_small = 0
+    left_counter_large = 0
+    right_counter_large = 0
     mar_closed_counter = 0
     mar_halfopen_counter = 0
-    left_eye_closed = False
-    right_eye_closed = False
+    left_eye_closed_s = False
+    left_eye_closed_l = False
+    right_eye_closed_s = False
+    right_eye_closed_l = False
     mar_state = "stopped"
     with mp_face_mesh.FaceMesh(static_image_mode=False,
                                max_num_faces=1,
@@ -127,7 +133,7 @@ async def cv_loop():
             frame = cv2.flip(frame, 1)
 
             # frame resizing
-            frame = scale(frame, 0.6)
+            frame = scale(frame, 0.5)
             frame = zoom_center_crop(frame, 2.2, 40)
 
             async with frame_lock:
@@ -152,26 +158,39 @@ async def cv_loop():
                 right_smooth = float(np.mean(right_ear_history))
                 # Draw EAR on frame
                 cv2.putText(frame, f"LEFT EAR: {left_smooth:.3f}", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if left_smooth > EAR_THRESHOLD else (0, 0, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if left_smooth > EAR_THRESHOLD_SMALL else (0, 0, 255), 2)
                 
                 cv2.putText(frame, f"RIGHT EAR: {right_smooth:.3f}", (350, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if right_smooth > EAR_THRESHOLD else (0, 0, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if right_smooth > EAR_THRESHOLD_SMALL else (0, 0, 255), 2)
                 cv2.putText(frame, f"MAR: {mar_smooth:.3f}", (10, 110),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["move"]), (60, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-                cv2.putText(frame, str(data["steer"]), (90, 400),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["move"]), (60, 250),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["steer_s"]), (90, 300),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+                cv2.putText(frame, str(data["steer_l"]), (90, 350),cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 # Check drowsiness
-                if left_smooth < EAR_THRESHOLD:
-                    left_counter += 1
+                if left_smooth < EAR_THRESHOLD_SMALL:
+                    left_counter_small += 1
                 else:
-                    left_counter = 0
-                    left_eye_closed = False
+                    left_counter_small = 0
+                    left_eye_closed_s = False
 
-                if right_smooth < EAR_THRESHOLD:
-                    right_counter += 1
+                if left_smooth < EAR_THRESHOLD_LARGE:
+                    left_counter_large += 1
                 else:
-                    right_counter = 0
-                    right_eye_closed = False
+                    left_counter_large = 0
+                    left_eye_closed_l = False
+
+                if right_smooth < EAR_THRESHOLD_SMALL:
+                    right_counter_small += 1
+                else:
+                    right_counter_small = 0
+                    right_eye_closed_s = False
+
+                if right_smooth < EAR_THRESHOLD_LARGE:
+                    right_counter_large += 1
+                else:
+                    right_counter_large = 0
+                    right_eye_closed_l = False
 
                 if mar_smooth < MAR_CLOSED_THRESHOLD:
                     mar_closed_counter += 1
@@ -187,43 +206,80 @@ async def cv_loop():
 
                 # small and QUICK 
                 # Trigger detection if eyes closed for too long, ensures no unplanning turns due to twitching
-                if left_counter >= CONSEC_FRAMES and not left_eye_closed:
-                    left_eye_closed = True
+                if left_counter_small >= CONSEC_FRAMES and not left_eye_closed_s:
+                    left_eye_closed_s = True
 
-                if right_counter >= CONSEC_FRAMES and not right_eye_closed:
-                    right_eye_closed = True
+                if left_counter_large >= CONSEC_FRAMES and not left_eye_closed_l:
+                    left_eye_closed_l = True
+
+                if right_counter_small >= CONSEC_FRAMES and not right_eye_closed_s:
+                    right_eye_closed_s = True
+                
+                if right_counter_large >= CONSEC_FRAMES and not right_eye_closed_l:
+                    right_eye_closed_l = True
 
                 if mar_closed_counter >= CONSEC_FRAMES and not mar_state == "closed":
                     mar_state = "closed"
                 
                 if mar_halfopen_counter >= CONSEC_FRAMES and not mar_state == "halfopen":
                     mar_state = "halfopen"
-
-                if not left_eye_closed and not right_eye_closed:
-                    data["steer"] = 0
+                
+                # -- LARGE MODE STEERING
+                if not left_eye_closed_l and not right_eye_closed_l:
+                    data["steer_l"] = 0
                 # Visual alert
-                if left_eye_closed:
-                    if data["steer"] > -0.2:
-                        data["steer"] -= 0.05
-                    elif data["steer"] > -0.4:
-                         data["steer"] -= 0.03
-                    elif data["steer"] > -1:
-                        data["steer"] -= 0.01
+                if left_eye_closed_l:
+                    if data["steer_l"] > -0.2:
+                        data["steer_l"] -= 0.05
+                    elif data["steer_l"] > -0.4:
+                         data["steer_l"] -= 0.03
+                    elif data["steer_l"] > -1:
+                        data["steer_l"] -= 0.01
                     else:
-                        data["steer"] = -1
+                        data["steer_l"] = -1
+                    cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 3)
+                if right_eye_closed_l:
+                    if data["steer_l"] < 0.2:
+                        data["steer_l"] += 0.05
+                    elif data["steer_l"] < 0.4:
+                         data["steer_l"] += 0.03
+                    elif data["steer_l"] < 1:
+                        data["steer_l"] += 0.01
+                    else:
+                        data["steer_l"] = 1
+                    cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 3)
+                    
+                # -- SMALL MODE STEERING --
+                if not left_eye_closed_s and not right_eye_closed_s:
+                    data["steer_s"] = 0
+                # Visual alert
+                if left_eye_closed_s:
+                    if data["steer_s"] > -0.2:
+                        data["steer_s"] -= 0.05
+                    elif data["steer_s"] > -0.4:
+                         data["steer_s"] -= 0.03
+                    elif data["steer_s"] > -1:
+                        data["steer_s"] -= 0.01
+                    else:
+                        data["steer_s"] = -1
                     cv2.putText(frame, "LEFT EYE CLOSED", (10, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
-                if right_eye_closed:
-                    if data["steer"] < 0.2:
-                        data["steer"] += 0.05
-                    elif data["steer"] < 0.4:
-                         data["steer"] += 0.03
-                    elif data["steer"] < 1:
-                        data["steer"] += 0.01
+                if right_eye_closed_s:
+                    if data["steer_s"] < 0.2:
+                        data["steer_s"] += 0.05
+                    elif data["steer_s"] < 0.4:
+                         data["steer_s"] += 0.03
+                    elif data["steer_s"] < 1:
+                        data["steer_s"] += 0.01
                     else:
-                        data["steer"] = 1
+                        data["steer_s"] = 1
                     cv2.putText(frame, "RIGHT EYE CLOSED", (350, 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+
+                # DRIVING    
+                
                 if mar_state == "closed":
                     if data["move"] > 0:
                         data["move"] = 0
