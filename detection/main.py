@@ -20,7 +20,7 @@ EAR_THRESHOLD_LARGE = 0.16
 MAR_CLOSED_THRESHOLD = 0.5
 MAR_HALFOPEN_THRESHOLD = 1
 # Number of consecutive frames with EAR < threshold to trigger alarm
-CONSEC_FRAMES = 5
+CONSEC_FRAMES = 2
 SMOOTH_WINDOW = 6           # Moving average window for EAR to reduce flicker
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144] # clockwise ish ig haha idk
 RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]# For mouth we use inner upper/lower and corners:
@@ -76,27 +76,32 @@ def zoom_center_crop(image, scale_factor=1.5, height_offset=50):
     zoomed_image = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
     
     return zoomed_image
-
 async def handler(websocket):
     try:
         while True:
             await websocket.send(json.dumps(data))
             await asyncio.sleep(0.05)
+
             try:
                 msg = await asyncio.wait_for(websocket.recv(), timeout=0.01)
                 print("Received:", msg)
 
                 if msg == "capture":
-                    capture(current_frame)
+                    # Ensure the latest frame is captured
+                    async with frame_lock:
+                        capture(current_frame)  # This ensures we're capturing the most up-to-date frame
             except asyncio.TimeoutError:
                 pass 
     except websockets.exceptions.ConnectionClosed:
         print("CLIENT DISCONNECTED")
+
 async def servermain():
     async with serve(handler, "localhost", PORT):
         print(f"WebSocket running on ws://localhost:{PORT}")
         await asyncio.Future()
 async def cv_loop():
+    global current_frame
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("ERROR: Could not open camera.")
@@ -134,10 +139,11 @@ async def cv_loop():
 
             # frame resizing
             frame = scale(frame, 0.5)
-            frame = zoom_center_crop(frame, 2.2, 40)
+            frame = zoom_center_crop(frame, 2.3, 40)
 
-            async with frame_lock:
-                current_frame = frame.copy()
+            # async with frame_lock:
+            current_frame = frame.copy()
+
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             results = face_mesh.process(rgb_frame)
