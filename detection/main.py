@@ -142,8 +142,8 @@ async def cv_loop():
             frame = cv2.flip(frame, 1)
 
             # frame resizing
-            # frame = scale(frame, 0.5)
-            # frame = zoom_center_crop(frame, 2.3, 40)
+            frame = scale(frame, 0.5)
+            frame = zoom_center_crop(frame, 2.3, 40)
 
             # async with frame_lock:
             current_frame = frame.copy()
