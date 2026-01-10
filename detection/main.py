@@ -15,8 +15,8 @@ import os
 # Configuration (tweak me)
 # -------------------------
 # Eye Aspect Ratio threshold below which eye is considered "closed"
-EAR_THRESHOLD_SMALL = 0.11
-EAR_THRESHOLD_LARGE = 0.16
+EAR_THRESHOLD_SMALL = 0.1
+EAR_THRESHOLD_LARGE = 0.13
 MAR_CLOSED_THRESHOLD = 0.5
 MAR_HALFOPEN_THRESHOLD = 1
 # Number of consecutive frames with EAR < threshold to trigger alarm
@@ -143,7 +143,7 @@ async def cv_loop():
 
             # frame resizing
             frame = scale(frame, 0.5)
-            frame = zoom_center_crop(frame, 2.3, 40)
+            frame = zoom_center_crop(frame, 3.2, -20)
 
             # async with frame_lock:
             current_frame = frame.copy()
